@@ -13,6 +13,7 @@ import com.microdb.model.row.RowID;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 页，读写磁盘文件数据时以page为基本单位
@@ -27,6 +28,10 @@ public class HeapPage extends DirtyPage implements Page, Serializable {
      * page 编号
      */
     private PageID pageID;
+    /**
+     * 页在内存中的访问频率
+     */
+    protected AtomicLong accessFrequency=new AtomicLong(0);
     /**
      * 行数据数组
      */
@@ -61,6 +66,10 @@ public class HeapPage extends DirtyPage implements Page, Serializable {
 
         // 保留页原始数据
         saveBeforePage();
+    }
+    @Override
+    public AtomicLong getAccessFrequency() {
+        return accessFrequency;
     }
 
     @Override

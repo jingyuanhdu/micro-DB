@@ -8,6 +8,7 @@ import com.microdb.model.table.TableDesc;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * b+树各类页的公共属性、方法
@@ -21,8 +22,11 @@ public abstract class BPTreePage extends DirtyPage implements Page, Serializable
     /**
      * 页ID
      */
-    protected BPTreePageID pageID;
-
+    protected BPTreePageID  pageID;
+    /**
+     * 页在内存中的访问频率
+     */
+    protected AtomicLong accessFrequency=new AtomicLong(0);
     /**
      * 父节点pageNo,可能是internal节点或者是rootPtr节点
      */
@@ -42,6 +46,10 @@ public abstract class BPTreePage extends DirtyPage implements Page, Serializable
      * 原始页数据
      */
     protected byte[] beforePageData;
+    @Override
+    public AtomicLong getAccessFrequency() {
+        return accessFrequency;
+    }
 
     @Override
     public BPTreePageID getPageID() {

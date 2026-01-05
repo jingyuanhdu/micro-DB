@@ -25,10 +25,11 @@ public class PropertiesConfigParser {
             props.load(in);
             int pageSize = Integer.parseInt(props.getProperty("page_size", "4096"));
             int bufferPoolCapacity = Integer.parseInt(props.getProperty("buffer_pool_capacity", "100"));
+            int evictCount = Integer.parseInt(props.getProperty("evict_count", "10"));
             // load 文本
             // String text = load(filePath);
             // 文本parse，创建config
-            return new DBConfig(pageSize, bufferPoolCapacity);
+            return new DBConfig(pageSize, bufferPoolCapacity,evictCount);
         } catch (Exception e) {
             throw new ParseException("配置解析失败", e);
         }

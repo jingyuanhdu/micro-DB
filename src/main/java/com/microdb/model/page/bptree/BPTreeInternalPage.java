@@ -297,7 +297,7 @@ public class BPTreeInternalPage extends BPTreePage implements Serializable {
 
         // 第一个节点特殊处理
         if (getExistCount() == 0) {
-            setEntry(entry, 0);
+             setEntry(entry, 0);
             return;
         }
 

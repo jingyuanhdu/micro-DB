@@ -15,11 +15,9 @@ import com.microdb.transaction.Transaction;
 import com.microdb.transaction.TransactionID;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 缓存池
@@ -66,11 +64,15 @@ public class BufferPool {
         if (page == null) {
             if (isFull()) {
                 // 驱逐页面
-                this.evictPages();
+                //this.evictPages();
+                //LFU实现的驱逐页面
+                this.evictPagesByFrequency();
             }
             page = DataBase.getInstance().getDbTableById(pageID.getTableId()).getTableFile().readPageFromDisk(pageID);
             pool.put(pageID, page);
         }
+        //增加访问频率
+        page.getAccessFrequency().incrementAndGet();
         return page;
     }
 
@@ -91,7 +93,8 @@ public class BufferPool {
         // TODO dirtyPages.size 极限值过大说明page size 配置不合理
         System.out.println("dirtyPages.size():" + dirtyPages.size());
         for (Map.Entry<PageID, Page> entry : dirtyPages.entrySet()) {
-            pool.put(entry.getKey(), entry.getValue());
+            Page value = entry.getValue();
+            pool.put(entry.getKey(),value);
         }
         Connection.clearDirtyPages();
     }
@@ -107,7 +110,9 @@ public class BufferPool {
         HashMap<PageID, Page> dirtyPages = Connection.getDirtyPages();
         System.out.println("del.dirtyPages.size():" + dirtyPages.size());
         for (Map.Entry<PageID, Page> entry : dirtyPages.entrySet()) {
-            pool.put(entry.getKey(), entry.getValue());
+            Page value = entry.getValue();
+            value.getAccessFrequency().incrementAndGet();
+            pool.put(entry.getKey(), value);
         }
         // 如果不清，会严重降低性能
         Connection.clearDirtyPages();
@@ -144,6 +149,70 @@ public class BufferPool {
         }
     }
 
+    /**
+     * 限制容量为heapSize的大根堆实现
+     * 为了淘汰访问次数最小的heapSize个页面而实现
+     */
+    public static class FixedSizeMinHeap{
+        /**
+         * 堆容量
+         */
+        private final int heapSize;
+        /**
+         * 大根堆
+         */
+        private final PriorityQueue<Page> maxheap;
+
+        public FixedSizeMinHeap(int heapSize) {
+            this.heapSize = heapSize;
+            //先以访问频率比较，如果相等再比较页号，建立大根堆。（频率相等的情况下判断页号大小主要是因为，页号大的是最近创建的可能被访问的概率更大，因此淘汰页号小的）
+            this.maxheap = new PriorityQueue<>(new Comparator<Page>() {
+                @Override
+                public int compare(Page o1, Page o2) {
+                    int compareFre = Integer.compare(o1.getAccessFrequency().intValue(), o2.getAccessFrequency().intValue());
+                    int comparePageNo = Integer.compare(o1.getPageID().getPageNo(), o2.getPageID().getPageNo());
+                    return compareFre!=0?-compareFre:-comparePageNo;
+                }
+            });
+        }
+        public void add(Page page) {
+            if (maxheap.size() < heapSize) {
+                maxheap.add(page);
+            }
+            else {
+                //访问频率比堆顶小，或者频率相等但页号比堆顶小，则弹出堆顶元素并入堆。
+                if(maxheap.peek().getAccessFrequency().intValue() > page.getAccessFrequency().intValue()
+                        || maxheap.peek().getAccessFrequency().intValue() == page.getAccessFrequency().intValue()
+                        && maxheap.peek().getPageID().getPageNo() > page.getPageID().getPageNo()) {
+                    maxheap.poll();
+                    maxheap.add(page);
+                }
+            }
+        }
+        public boolean isEmpty(){
+            return maxheap.isEmpty();
+        }
+        public Page poll(){
+            return maxheap.poll();
+        }
+    }
+    /**
+     * 带有LFU的驱逐页面实现
+     */
+    private void evictPagesByFrequency() {
+        FixedSizeMinHeap heap = new FixedSizeMinHeap(DataBase.getDBConfig().getEvictCount());
+        //使用大根堆筛选出访问频率最小的10个页面
+        for (Map.Entry<PageID, Page> entry : pool.entrySet()) {
+            Page page = entry.getValue();
+            heap.add(page);
+        }
+        while (!heap.isEmpty()) {
+            Page page = heap.poll();
+            //淘汰的页面进行刷盘
+            flushPage(page);
+            pool.remove(page.getPageID());
+        }
+    }
     /**
      * 刷盘
      */
@@ -203,5 +272,14 @@ public class BufferPool {
         for (Map.Entry<PageID, Page> entry : pool.entrySet()) {
             flushPage(entry.getValue());
         }
+    }
+
+    /**
+     * 返回成员变量pool
+     * 便于验证LFU的结果
+     */
+    @VisibleForTest
+    public ConcurrentHashMap<PageID,Page> getPool() {
+        return pool;
     }
 }

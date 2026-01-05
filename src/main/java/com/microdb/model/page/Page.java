@@ -3,6 +3,7 @@ package com.microdb.model.page;
 import com.microdb.transaction.TransactionID;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Page 抽象接口
@@ -14,7 +15,10 @@ import java.io.IOException;
 public interface Page {
 
     PageID getPageID();
-
+    /**
+     * 获得页面访问频率
+     */
+    AtomicLong getAccessFrequency();
     /**
      * 序列化page数据
      */

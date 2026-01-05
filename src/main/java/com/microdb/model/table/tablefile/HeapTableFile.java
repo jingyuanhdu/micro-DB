@@ -115,6 +115,8 @@ public class HeapTableFile implements TableFile {
             availablePage = new HeapPage(pageID, HeapPage.createEmptyPageData());
             writePageToDisk(availablePage);
             availablePage = (HeapPage) DataBase.getBufferPool().getPage(pageID);
+            //抵消insert时由于getPage增加的访问次数。
+            availablePage.getAccessFrequency().decrementAndGet();
         }
         availablePage.insertRow(row);
         Connection.cacheDirtyPage(availablePage);
@@ -137,6 +139,8 @@ public class HeapTableFile implements TableFile {
         for (int pageNo = 0; pageNo < existPageCount; pageNo++) {
             PageID pageID = new HeapPageID(this.getTableId(), pageNo);
             Page pg = DataBase.getBufferPool().getPage(pageID);
+            //抵消insert时每次遍历都增加一次访问。
+            pg.getAccessFrequency().decrementAndGet();
             if (pg.hasEmptySlot()) {
                 return pg;
             }
